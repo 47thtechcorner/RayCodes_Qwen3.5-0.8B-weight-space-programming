@@ -1,0 +1,56 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{Edge Mathematical Derivation: Definite Integral Evaluation}
+\author{Qwen3.5-0.8B Weight-Space Programming}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Problem Statement}
+Evaluate the definite integral without entering recursive evaluation loops:
+\begin{equation}
+I = \int_{0}^{\pi/2} \frac{\sin(x)}{\sin(x) + \cos(x)} \, dx
+\end{equation}
+
+\section*{Step-by-Step Analytical Derivation}
+
+\subsection*{Step 1: Symmetry and Reflection Property}
+Using the integral reflection identity $\int_{a}^{b} f(x) \, dx = \int_{a}^{b} f(a + b - x) \, dx$, substitute:
+\begin{equation}
+u = \frac{\pi}{2} - x, \quad dx = -du
+\end{equation}
+When $x = 0$, $u = \pi/2$, and when $x = \pi/2$, $u = 0$. Using the standard trigonometric co-function identities:
+\begin{align*}
+\sin\left(\frac{\pi}{2} - u\right) &= \cos(u) \\
+\cos\left(\frac{\pi}{2} - u\right) &= \sin(u)
+\end{align*}
+
+\subsection*{Step 2: Dual Integral Formulation}
+Rewriting the integral under substitution:
+\begin{equation}
+I = \int_{0}^{\pi/2} \frac{\cos(u)}{\cos(u) + \sin(u)} \, du
+\end{equation}
+Since the dummy integration variable can be rewritten as $x$:
+\begin{equation}
+I = \int_{0}^{\pi/2} \frac{\cos(x)}{\sin(x) + \cos(x)} \, dx
+\end{equation}
+
+\subsection*{Step 3: Linear Combination}
+Summing the original equation and the transformed identity:
+\begin{align*}
+2I &= \int_{0}^{\pi/2} \frac{\sin(x)}{\sin(x) + \cos(x)} \, dx + \int_{0}^{\pi/2} \frac{\cos(x)}{\sin(x) + \cos(x)} \, dx \\
+2I &= \int_{0}^{\pi/2} \frac{\sin(x) + \cos(x)}{\sin(x) + \cos(x)} \, dx \\
+2I &= \int_{0}^{\pi/2} 1 \, dx = \left[ x \right]_{0}^{\pi/2} = \frac{\pi}{2}
+\end{align*}
+
+\subsection*{Step 4: Final Solution}
+Dividing by 2 yields the exact value cleanly without looping:
+\begin{equation}
+\boxed{I = \frac{\pi}{4}}
+\end{equation}
+
+\end{document}

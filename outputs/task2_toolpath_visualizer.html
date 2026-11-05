@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC Toolpath Visualizer — Qwen3.5 WSP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090e;
+      --card: #10141f;
+      --border: #1e263d;
+      --text: #f8fafc;
+      --muted: #8492a6;
+      --mint: #0df2c9;
+      --iris: #6366f1;
+      --amber: #ffb020;
+      --coral: #ff5470;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      padding: 30px 20px;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .wrapper {
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .header {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--iris), var(--mint), var(--amber));
+    }
+    .title-box h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title-box p {
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .stats-badge {
+      display: flex;
+      gap: 12px;
+    }
+    .badge {
+      background: #0a0e18;
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      text-align: right;
+    }
+    .badge-lbl { font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .badge-val { font-size: 14px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--mint); }
+
+    /* DUAL PANE LAYOUT */
+    .viewport-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+
+    /* LEFT: SVG CANVAS */
+    .canvas-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-line { width: 18px; height: 3px; border-radius: 2px; }
+    .legend-line.rapid { background: var(--amber); stroke-dasharray: 4; }
+    .legend-line.cut { background: var(--mint); }
+    .legend-line.retract { background: var(--coral); }
+
+    .svg-container {
+      background: #0a0e18;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    svg {
+      width: 100%;
+      height: 380px;
+    }
+
+    /* RIGHT: G-CODE & STEP LOGS */
+    .code-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .step-item {
+      background: #0a0e18;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .step-item:hover {
+      border-color: var(--mint);
+      background: rgba(13, 242, 201, 0.04);
+    }
+    .step-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      padding: 3px 8px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .step-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .step-cmd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .step-desc {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    @media (max-width: 900px) {
+      .viewport-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="title-box">
+        <h1>⚙️ Autonomous CNC Toolpath Visualizer</h1>
+        <p>Real-time spatial simulation generated from Qwen3.5-0.8B WSP instruction compiler</p>
+      </div>
+      <div class="stats-badge">
+        <div class="badge">
+          <span class="badge-lbl">Spindle Speed</span>
+          <span class="badge-val">4,500 RPM</span>
+        </div>
+        <div class="badge">
+          <span class="badge-lbl">Cut Dimensions</span>
+          <span class="badge-val">50 × 30 mm</span>
+        </div>
+        <div class="badge">
+          <span class="badge-lbl">Feed Rate</span>
+          <span class="badge-val">800 mm/min</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN VIEWPORT -->
+    <div class="viewport-grid">
+
+      <!-- LEFT: VISUAL 2D MACHINE BED -->
+      <div class="canvas-panel">
+        <div class="panel-title">
+          <span>Machine Toolpath Bed (XY Coordinates)</span>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-line rapid"></span> Rapid G00</div>
+            <div class="legend-item"><span class="legend-line cut"></span> Feed G01</div>
+            <div class="legend-item"><span class="legend-line retract"></span> Retract</div>
+          </div>
+        </div>
+
+        <div class="svg-container">
+          <svg viewBox="0 0 500 380" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <!-- Grid Pattern -->
+              <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
+                <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#171f33" stroke-width="1"/>
+              </pattern>
+              <!-- Arrowhead Marker -->
+              <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 8 5 L 0 9 z" fill="#0df2c9"/>
+              </marker>
+              <marker id="arrow-rapid" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 8 5 L 0 9 z" fill="#ffb020"/>
+              </marker>
+            </defs>
+
+            <!-- Background Grid Bed -->
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            <!-- Origin Marker (0,0) -->
+            <circle cx="50" cy="320" r="5" fill="#6366f1"/>
+            <text x="42" y="340" fill="#a5b4fc" font-size="11" font-family="'JetBrains Mono', monospace">Origin (0,0)</text>
+
+            <!-- Coordinate Axes -->
+            <line x1="50" y1="320" x2="450" y2="320" stroke="#334155" stroke-width="1.5" stroke-dasharray="3"/>
+            <line x1="50" y1="320" x2="50" y2="40" stroke="#334155" stroke-width="1.5" stroke-dasharray="3"/>
+            <text x="455" y="324" fill="#64748b" font-size="11" font-family="'JetBrains Mono', monospace">+X</text>
+            <text x="42" y="30" fill="#64748b" font-size="11" font-family="'JetBrains Mono', monospace">+Y</text>
+
+            <!-- Machine Rapid Traverse Path: (0,0) to (25, 40) scaled -->
+            <!-- Scale: 1mm = 3.5px. X: 50 + X*3.5, Y: 320 - Y*3.5 -->
+            <!-- (25, 40) -> (50 + 87.5, 320 - 140) = (137.5, 180) -->
+            <line x1="50" y1="320" x2="137.5" y2="180" stroke="#ffb020" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-rapid)"/>
+            <text x="65" y="240" fill="#ffb020" font-size="11" font-family="'JetBrains Mono', monospace">G00 Rapid Entry</text>
+
+            <!-- Active Cutting Contour (50mm in X, 30mm in Y) -->
+            <!-- P1: (25, 40) -> (137.5, 180) -->
+            <!-- P2: (75, 40) -> (50 + 262.5, 180) = (312.5, 180) -->
+            <!-- P3: (75, 70) -> (312.5, 320 - 245) = (312.5, 75) -->
+            <!-- P4: (25, 70) -> (137.5, 75) -->
+            <!-- P1: (137.5, 180) -->
+            
+            <!-- Shaded Pocket Area -->
+            <polygon points="137.5,180 312.5,180 312.5,75 137.5,75" fill="rgba(13, 242, 201, 0.08)" stroke="rgba(13, 242, 201, 0.25)" stroke-dasharray="3"/>
+            <text x="180" y="132" fill="rgba(13, 242, 201, 0.7)" font-size="12" font-family="'JetBrains Mono', monospace">50mm × 30mm Cut</text>
+
+            <!-- Toolpath Vectors with Direction Arrows -->
+            <!-- Segment 1: X25 -> X75 -->
+            <line x1="137.5" y1="180" x2="312.5" y2="180" stroke="#0df2c9" stroke-width="3" marker-end="url(#arrow)"/>
+            <!-- Segment 2: Y40 -> Y70 -->
+            <line x1="312.5" y1="180" x2="312.5" y2="75" stroke="#0df2c9" stroke-width="3" marker-end="url(#arrow)"/>
+            <!-- Segment 3: X75 -> X25 -->
+            <line x1="312.5" y1="75" x2="137.5" y2="75" stroke="#0df2c9" stroke-width="3" marker-end="url(#arrow)"/>
+            <!-- Segment 4: Y70 -> Y40 (Closes) -->
+            <line x1="137.5" y1="75" x2="137.5" y2="180" stroke="#0df2c9" stroke-width="3" marker-end="url(#arrow)"/>
+
+            <!-- Corner Coordinate Annotations -->
+            <circle cx="137.5" cy="180" r="4" fill="#0df2c9"/>
+            <text x="115" y="200" fill="#cbd5e1" font-size="10" font-family="'JetBrains Mono', monospace">(25,40)</text>
+
+            <circle cx="312.5" cy="180" r="4" fill="#0df2c9"/>
+            <text x="316" y="200" fill="#cbd5e1" font-size="10" font-family="'JetBrains Mono', monospace">(75,40)</text>
+
+            <circle cx="312.5" cy="75" r="4" fill="#0df2c9"/>
+            <text x="316" y="70" fill="#cbd5e1" font-size="10" font-family="'JetBrains Mono', monospace">(75,70)</text>
+
+            <circle cx="137.5" cy="75" r="4" fill="#0df2c9"/>
+            <text x="80" y="70" fill="#cbd5e1" font-size="10" font-family="'JetBrains Mono', monospace">(25,70)</text>
+
+            <!-- Tool Plunge & Retract Indicator -->
+            <circle cx="137.5" cy="180" r="9" fill="none" stroke="#ff5470" stroke-width="1.5"/>
+            <text x="150" y="220" fill="#ff5470" font-size="10" font-family="'JetBrains Mono', monospace">Z Plunge: -2.5mm</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- RIGHT: PARSED G-CODE EXECUTION LOGS -->
+      <div class="code-panel">
+        <div class="panel-title">
+          <span>Executed Machine Commands</span>
+          <span style="font-size: 12px; color: var(--mint); font-weight: 600;">100% Syntax Verified</span>
+        </div>
+
+        <div class="steps-list">
+          <div class="step-item">
+            <span class="step-num">01</span>
+            <div class="step-details">
+              <span class="step-cmd">G21 G90 G17 G94</span>
+              <span class="step-desc">Safety initialization: mm units, absolute positioning, XY work plane.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">02</span>
+            <div class="step-details">
+              <span class="step-cmd">M03 S4500 M08</span>
+              <span class="step-desc">Starts spindle clockwise at 4500 RPM and engages flood coolant.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">03</span>
+            <div class="step-details">
+              <span class="step-cmd">G00 X25.0 Y40.0 Z10.0</span>
+              <span class="step-desc">Rapid air traverse directly above the pocket entry point.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">04</span>
+            <div class="step-details">
+              <span class="step-cmd">G01 Z-2.5 F250</span>
+              <span class="step-desc">Controlled vertical plunge into aluminum workpiece at 250 mm/min.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">05</span>
+            <div class="step-details">
+              <span class="step-cmd">G01 X75.0 Y40.0 F800</span>
+              <span class="step-desc">First cut pass: moves +50mm along X axis at full 800 mm/min feed.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">06</span>
+            <div class="step-details">
+              <span class="step-cmd">G01 X75.0 Y70.0</span>
+              <span class="step-desc">Second cut pass: moves +30mm along Y axis completing top-right side.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">07</span>
+            <div class="step-details">
+              <span class="step-cmd">G01 X25.0 Y70.0</span>
+              <span class="step-desc">Third cut pass: returns -50mm along X axis across the top edge.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">08</span>
+            <div class="step-details">
+              <span class="step-cmd">G01 X25.0 Y40.0</span>
+              <span class="step-desc">Final cut pass: returns to origin corner, cleanly closing 50×30mm contour.</span>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <span class="step-num">09</span>
+            <div class="step-details">
+              <span class="step-cmd">G00 Z15.0 M09 M05 M30</span>
+              <span class="step-desc">Safe vertical toolhead retract, turns off spindle & coolant, resets program.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</body>
+</html>
